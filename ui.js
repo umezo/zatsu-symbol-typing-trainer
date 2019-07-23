@@ -1,20 +1,80 @@
 'use strict';
 const React = require('react');
-const PropTypes = require('prop-types');
-const {Text, Color} = require('ink');
+const {Color, Box, StdinContext} = require('ink');
 
-const App = ({name}) => (
-	<Text>
-		Hello, <Color green>{name}</Color>
-	</Text>
-);
+const list = '(){}<>[]_-+=\'"!@#$%^&*\\|,./?;:`~'.split('');
 
-App.propTypes = {
-	name: PropTypes.string
+const getKey = () => {
+	return list[Math.floor(Math.random() * list.length)];
 };
 
-App.defaultProps = {
-	name: 'Stranger'
+const Context = () => {
+	return (
+		<StdinContext.Consumer>
+			{({stdin, setRawMode}) => (
+				<App stdin={stdin} setRawMode={setRawMode}/>
+			)}
+		</StdinContext.Consumer>
+	);
 };
 
-module.exports = App;
+const App = props => {
+	const [progress, setProgress] = React.useState([{key: getKey(), result: 0}]);
+
+	const handleInput = React.useCallback(data => {
+		const newProgress = progress.slice();
+		const last = {
+			...newProgress[newProgress.length - 1]
+		};
+
+		last.result = last.key === data ? 1 : -1;
+
+		newProgress[newProgress.length - 1] = last;
+
+		setProgress([...newProgress, {key: getKey(), result: 0}]);
+	}, [progress, setProgress]);
+
+	React.useEffect(() => {
+		props.setRawMode(true);
+		props.stdin.on('data', handleInput);
+
+		return () => {
+			props.setRawMode(false);
+			props.stdin.off('data', handleInput);
+		};
+	}, [props.stdin, props.setRawMode, handleInput, props]);
+
+	const total = React.useMemo(() => {
+		return progress.reduce((sum, p) => {
+			return sum + (p.result !== 0 ? 1 : 0);
+		}, 0);
+	}, [progress]);
+
+	const correct = React.useMemo(() => {
+		return progress.reduce((sum, p) => {
+			return sum + (p.result === 1 ? 1 : 0);
+		}, 0);
+	}, [progress]);
+
+	return (
+		<Box height={3} flexDirection="column">
+			<Box>
+				{progress.map((p, index) => (
+					<Color key={index} green={p.result === 1} red={p.result === -1}>
+						{p.key}
+					</Color>
+				))}
+			</Box>
+			{total !== 0 ? (
+				<Box>
+					{correct / total * 100}%
+				</Box>
+			) : null}
+			<Box>
+				{correct}/{total}
+			</Box>
+		</Box>
+	);
+};
+
+module.exports = Context;
